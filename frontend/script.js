@@ -1,5 +1,5 @@
 // >>> PUT YOUR RENDER BACKEND URL HERE (no trailing slash), e.g. "https://nutricheck-api.onrender.com"
-const RENDER_API_BASE = "https://nutricheck-api.onrender.com";
+const RENDER_API_BASE = "https://nutricheck-0x2f.onrender.com";
 
 const IS_LOCAL = ["localhost", "127.0.0.1", ""].includes(window.location.hostname);
 const API_BASE = IS_LOCAL ? "http://127.0.0.1:8000" : RENDER_API_BASE;
