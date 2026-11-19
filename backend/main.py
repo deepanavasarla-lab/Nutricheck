@@ -84,6 +84,18 @@ def run_ner(text: str):
     return extract_entities(doc.ents, text)
 
 
+def library_versions() -> dict:
+    """Versions that matter for loading the NER model (compare with your local machine!)."""
+    import platform, sys
+    out = {"python": sys.version.split()[0], "platform": platform.platform()}
+    for name in ("spacy", "thinc", "numpy", "sklearn", "joblib"):
+        try:
+            out[name] = __import__(name).__version__
+        except Exception as exc:  # noqa: BLE001
+            out[name] = f"not importable: {exc}"
+    return out
+
+
 def build_ml_text(entities: dict) -> str:
     """
     Reproduce the exact text construction used by the training notebook:
@@ -141,7 +153,7 @@ def home():
         "message": "NutriCheck Backend is running",
         "status": "OK",
         "models": {
-            "ner": "Portuguese 6-entity spaCy NER",
+            "ner": "Portuguese 6-entity spaCy NER + medical lexicon safety net",
             "classifier": "Logistic Regression + TF-IDF",
         },
     }
@@ -157,6 +169,22 @@ def health():
         "ner_model_folder": NER_MODEL_PATH.name,
         "ner_labels": MODEL_LABELS,
         "ner_labels_missing": MISSING_LABELS,
+        "versions": library_versions(),
+    }
+
+
+@app.post("/debug/ner")
+def debug_ner(data: MedicalText):
+    """Shows what the raw spaCy model finds vs. the final merged result (use it to diagnose deployment issues)."""
+    doc = nlp(data.text)
+    raw = [{"text": e.text, "label": e.label_, "start": e.start_char, "end": e.end_char} for e in doc.ents]
+    entities, allergy_info = extract_entities(doc.ents, data.text)
+    return {
+        "raw_model_entities": raw,
+        "raw_label_counts": {l: sum(1 for r in raw if r["label"] == l) for l in sorted({r["label"] for r in raw})},
+        "final_entities_pt": entities,
+        "lexicon_added": allergy_info.get("lexicon_added", []),
+        "versions": library_versions(),
     }
 
 

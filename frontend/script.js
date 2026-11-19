@@ -1,4 +1,9 @@
-const API_URL = "https://nutricheck-0x2f.onrender.com/predict";
+// >>> PUT YOUR RENDER BACKEND URL HERE (no trailing slash), e.g. "https://nutricheck-api.onrender.com"
+const RENDER_API_BASE = "https://nutricheck-api.onrender.com";
+
+const IS_LOCAL = ["localhost", "127.0.0.1", ""].includes(window.location.hostname);
+const API_BASE = IS_LOCAL ? "http://127.0.0.1:8000" : RENDER_API_BASE;
+const API_URL = `${API_BASE}/predict`;
 
 const textarea = document.getElementById("medicalText");
 const charCount = document.getElementById("charCount");
@@ -110,6 +115,11 @@ async function analyzeRecord() {
   resultStatus.textContent = "Processing";
   resultStatus.classList.remove("ready");
 
+  // Render's free plan puts the server to sleep; the first request can take ~50 s.
+  const wakeTimer = setTimeout(() => {
+    resultStatus.textContent = "Waking up the server (first request can take ~1 min)...";
+  }, 6000);
+
   try {
     const response = await fetch(API_URL, {
       method: "POST",
@@ -145,6 +155,7 @@ async function analyzeRecord() {
     errorBox.style.display = "block";
     resultStatus.textContent = "Connection error";
   } finally {
+    clearTimeout(wakeTimer);
     analyzeBtn.disabled = false;
     analyzeBtn.innerHTML =
       '<span class="btn-icon">✦</span> Analyze Medical Record <span class="arrow">→</span>';

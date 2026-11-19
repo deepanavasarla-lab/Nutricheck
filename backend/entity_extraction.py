@@ -14,6 +14,8 @@ What this module does
 import re
 import unicodedata
 
+from lexicon_extractor import find_lexicon_entities
+
 # Canonical label -> key used in the API / frontend
 LABEL_TO_KEY = {
     "SYMPTOM": "symptoms",
@@ -139,7 +141,7 @@ def _clean(value: str) -> str:
     return " ".join(value.split())
 
 
-def extract_entities(ents, text: str):
+def extract_entities(ents, text: str, use_lexicon: bool = True):
     """
     ents: iterable of objects with .label_, .text, .start_char, .end_char (spaCy doc.ents).
     Returns (entities, allergy_info)
@@ -161,7 +163,8 @@ def extract_entities(ents, text: str):
             return True
         return False
 
-    for ent in ents:
+    model_ents = list(ents)
+    for ent in model_ents:
         label = normalize_label(ent.label_)
         if label is None:
             continue
@@ -173,11 +176,25 @@ def extract_entities(ents, text: str):
         else:
             add(LABEL_TO_KEY[label], ent.text)
 
+    allergy_spans = []
     for hit in find_allergies(text):
         if hit["negated"]:
             denied = True
         elif add("allergies", hit["text"]):
             sources.add("rules")
+            allergy_spans.append((hit["start"], hit["end"]))
+
+    # Safety net: the statistical model often returns only SYMPTOM, so add what the lexicon finds.
+    # The model always wins on overlaps; words that are allergens ("alergia a penicilina") are not medications.
+    lexicon_added = []
+    if use_lexicon:
+        taken = [(e.start_char, e.end_char) for e in model_ents] + allergy_spans
+        for s, e, label in find_lexicon_entities(text):
+            if any(s < te and ts < e for ts, te in taken):
+                continue
+            if add(LABEL_TO_KEY[label], text[s:e]):
+                lexicon_added.append({"label": label, "text": _clean(text[s:e])})
+                taken.append((s, e))
 
     if entities["allergies"]:
         status = "present"
@@ -186,4 +203,6 @@ def extract_entities(ents, text: str):
     else:
         status = "not_mentioned"
 
-    return entities, {"status": status, "items": list(entities["allergies"]), "source": sorted(sources)}
+    info = {"status": status, "items": list(entities["allergies"]), "source": sorted(sources),
+            "lexicon_added": lexicon_added}
+    return entities, info
